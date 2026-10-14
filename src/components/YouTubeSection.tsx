@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { SITE_CONFIG, YouTubeVideoItem } from '../data/siteConfig';
 import { RevealOnScroll } from './RevealOnScroll';
-import { cyberAudio } from '../utils/soundEngine';
 
 export const YouTubeSection: React.FC = () => {
   const [recentVideos, setRecentVideos] = useState<YouTubeVideoItem[]>(
@@ -51,12 +50,10 @@ export const YouTubeSection: React.FC = () => {
   }, []);
 
   const handleRefresh = async () => {
-    cyberAudio.playClickPulse();
     await fetchLatestVideos();
   };
 
   const handleGoWatch = () => {
-    cyberAudio.playClickPulse();
     window.open(activeVideo.url, '_blank', 'noopener,noreferrer');
   };
 
@@ -69,7 +66,6 @@ export const YouTubeSection: React.FC = () => {
 
   const handleNextSneak = () => {
     setActiveVideo(nextVideo);
-    cyberAudio.playClickPulse();
   };
 
   return (

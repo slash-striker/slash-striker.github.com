@@ -11,19 +11,19 @@ const ServerEmblem: React.FC<{ type: CommunityCard['theme']['emblemType'] }> = (
       <svg viewBox="0 0 96 96" className="community-emblem-svg" fill="none">
         <polygon
           points="48,6 88,28 88,68 48,90 8,68 8,28"
-          stroke="#00F5FF"
+          stroke="#FF2740"
           strokeWidth="2.5"
-          fill="rgba(0, 245, 255, 0.1)"
+          fill="rgba(255, 39, 64, 0.12)"
         />
         <polygon
           points="48,18 76,34 76,62 48,78 20,62 20,34"
-          stroke="#397BFF"
+          stroke="#FF5468"
           strokeWidth="1.5"
           strokeDasharray="4 4"
         />
         <path
           d="M32 32H62L38 48H64L32 66"
-          stroke="#00F5FF"
+          stroke="#FF2740"
           strokeWidth="4.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -148,6 +148,22 @@ export const CommunitiesSection: React.FC = () => {
                     {server.sectorTag}
                   </span>
                 </div>
+
+                {/* Official Discord server artwork */}
+                {server.id === 'slashstr1ker' && (
+                  <div className="community-card__banner">
+                    <img
+                      src="/slashy.jpg"
+                      alt="Slashy in a neon cyberpunk city — official artwork of the SlashStr1ker Discord server"
+                      width="1200"
+                      height="1200"
+                      loading="lazy"
+                    />
+                    <span className="community-card__banner-tag">
+                      SERVER ARTWORK // SLASHY
+                    </span>
+                  </div>
+                )}
 
                 {/* Unique Abstract Holographic Emblem */}
                 <div className="community-card__emblem-wrap" aria-hidden="true">

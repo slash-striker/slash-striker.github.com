@@ -47,8 +47,21 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/index-DJRKhqfF.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-C3xzkWR8.css">
+    <script>
+      // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var theme = localStorage.getItem('ss-theme');
+          if (theme === 'light' || theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', theme);
+          }
+        } catch (e) {
+          // Storage unavailable — keep the default dark theme.
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-1m_QBZcv.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DRyUFV6B.css">
   </head>
   <body>
     <div id="root"></div>

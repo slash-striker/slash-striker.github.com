@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { SITE_CONFIG } from './data/siteConfig';
 import { CosmicBackground } from './components/CosmicBackground';
 import { CustomCursor } from './components/CustomCursor';
 import { Navbar } from './components/Navbar';
@@ -10,16 +9,79 @@ import { BotLabSection } from './components/BotLabSection';
 import { CommunitiesSection } from './components/CommunitiesSection';
 import { ContactSection } from './components/ContactSection';
 import { CreditsSection } from './components/CreditsSection';
+import { SpaceMineGame } from './components/SpaceMineGame';
 import { Footer } from './components/Footer';
 import { NotFoundView } from './components/NotFoundView';
 
-export const App: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<string>('home');
-  const [scrollProgress, setScrollProgress] = useState<number>(0);
-  const [pathname, setPathname] = useState<string>(() => window.location.pathname);
+/*
+ * Hash-based router (#/youtube, #/bots, ...). Hash routes work on any static
+ * host — GitHub Pages sends unknown real paths straight to the static
+ * 404.html, so pathname-based routes would never reach the SPA. Legacy bare
+ * anchors from the old one-pager (#about, #credits, ...) resolve to their
+ * new pages so old links keep working.
+ */
+const ROUTE_PATHS = [
+  '/',
+  '/youtube',
+  '/bots',
+  '/communities',
+  '/game',
+  '/contact',
+  '/credits',
+] as const;
 
-  const isNotFound =
-    pathname !== '/' && pathname !== '/index.html' && pathname !== '';
+const LEGACY_ANCHORS: Record<string, string> = {
+  '': '/',
+  home: '/',
+  about: '/',
+  'index.html': '/',
+  youtube: '/youtube',
+  bots: '/bots',
+  communities: '/communities',
+  game: '/game',
+  contact: '/contact',
+  credits: '/credits',
+};
+
+const SKIP_LINK_HASH = '#main-content';
+
+const resolveRoute = (hash: string): string | null => {
+  if (hash === SKIP_LINK_HASH) return '/';
+  const raw = hash.replace(/^#/, '');
+  if (raw.startsWith('/')) {
+    const path = `/${raw.replace(/^\/+/, '')}`;
+    const normalized =
+      path.length > 1 ? path.replace(/\/$/, '') : path;
+    return (ROUTE_PATHS as readonly string[]).includes(normalized)
+      ? normalized
+      : null;
+  }
+  return Object.prototype.hasOwnProperty.call(LEGACY_ANCHORS, raw)
+    ? LEGACY_ANCHORS[raw]
+    : null;
+};
+
+export const App: React.FC = () => {
+  const [route, setRoute] = useState<string | null>(() =>
+    resolveRoute(window.location.hash)
+  );
+  const [pathname, setPathname] = useState<string>(() => window.location.pathname);
+  const [scrollProgress, setScrollProgress] = useState<number>(0);
+
+  const isValidPath =
+    pathname === '/' || pathname === '/index.html' || pathname === '';
+
+  const showNotFound = !isValidPath || route === null;
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === SKIP_LINK_HASH) return;
+      setRoute(resolveRoute(window.location.hash));
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname);
@@ -32,32 +94,60 @@ export const App: React.FC = () => {
       const totalScroll =
         document.documentElement.scrollHeight - window.innerHeight;
       const currentProgress =
-        totalScroll > 0 ? Math.min(1, Math.max(0, window.scrollY / totalScroll)) : 0;
+        totalScroll > 0 ? Math.min(1, Math.max(0, window.scrollY / totalScroll))
+        : 0;
       setScrollProgress(currentProgress);
-
-      const sectionIds = SITE_CONFIG.navigation.map((n) => n.id);
-      let current = 'home';
-      for (const id of sectionIds) {
-        const el = document.getElementById(id);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= 180) {
-            current = id;
-          }
-        }
-      }
-      setActiveSection(current);
     };
 
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [route]);
 
   const handleReturnHome = () => {
     window.history.pushState(null, '', '/');
     setPathname('/');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (window.location.hash !== '#/' && window.location.hash !== '') {
+      window.location.hash = '#/';
+    } else {
+      setRoute('/');
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  const navId = route === '/' || route === null ? 'home' : route.slice(1);
+
+  const renderRouteContent = () => {
+    switch (route) {
+      case '/':
+        return (
+          <>
+            <HeroSection />
+
+            <div className="section-divider" aria-hidden="true">
+              <span className="section-divider__line" />
+              <span className="section-divider__tag">SYS.TRANSITION // 01-02</span>
+              <span className="section-divider__line" />
+            </div>
+
+            <AboutSection />
+          </>
+        );
+      case '/youtube':
+        return <YouTubeSection />;
+      case '/bots':
+        return <BotLabSection />;
+      case '/communities':
+        return <CommunitiesSection />;
+      case '/game':
+        return <SpaceMineGame />;
+      case '/contact':
+        return <ContactSection />;
+      case '/credits':
+        return <CreditsSection />;
+      default:
+        return null;
+    }
   };
 
   return (
@@ -69,61 +159,16 @@ export const App: React.FC = () => {
       <CosmicBackground />
       <CustomCursor />
 
-      <Navbar activeSection={activeSection} scrollProgress={scrollProgress} />
+      <Navbar activeSection={navId} scrollProgress={scrollProgress} />
 
-      {isNotFound ? (
+      {showNotFound ? (
         <NotFoundView onReturnHome={handleReturnHome} />
       ) : (
-        <main id="main-content">
-          <HeroSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 01-02</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <AboutSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 02-03</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <YouTubeSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 03-04</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <BotLabSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 04-05</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <CommunitiesSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 05-06</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <ContactSection />
-
-          <div className="section-divider" aria-hidden="true">
-            <span className="section-divider__line" />
-            <span className="section-divider__tag">SYS.TRANSITION // 06-07</span>
-            <span className="section-divider__line" />
-          </div>
-
-          <CreditsSection />
+        <main
+          id="main-content"
+          className={route === '/' ? undefined : 'page-view'}
+        >
+          {renderRouteContent()}
         </main>
       )}
 

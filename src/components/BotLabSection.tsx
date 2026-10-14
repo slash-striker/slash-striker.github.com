@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { SITE_CONFIG, BotSystemCard } from '../data/siteConfig';
 import { RevealOnScroll } from './RevealOnScroll';
-import { cyberAudio } from '../utils/soundEngine';
 
 interface BotCardProps {
   bot: BotSystemCard;
@@ -68,7 +67,6 @@ const HolographicBotCard: React.FC<BotCardProps> = ({
   }, [activeCategory, bot.commandCategories, searchQuery]);
 
   const handleCopyCommand = async (cmdName: string) => {
-    cyberAudio.playClickPulse();
     try {
       await navigator.clipboard.writeText(cmdName);
     } catch {
@@ -245,11 +243,9 @@ const HolographicBotCard: React.FC<BotCardProps> = ({
                     role="tab"
                     aria-selected={isSelected}
                     onClick={() => {
-                      cyberAudio.playClickPulse();
                       setSelectedCategoryId(cat.id);
                       setSearchQuery('');
                     }}
-                    onMouseEnter={() => cyberAudio.playHoverBlip()}
                     className={`bot-category-tab ${
                       isSelected ? 'is-active' : ''
                     }`}
@@ -286,7 +282,6 @@ const HolographicBotCard: React.FC<BotCardProps> = ({
                     key={`${cmd.categoryLabel}-${cmd.name}`}
                     type="button"
                     onClick={() => handleCopyCommand(cmd.name)}
-                    onMouseEnter={() => cyberAudio.playHoverBlip()}
                     className={`bot-cmd-item ${isCopied ? 'is-copied' : ''}`}
                     title={`Click to copy ${cmd.name}`}
                   >

@@ -115,13 +115,13 @@ export const SITE_CONFIG = {
   },
 
   navigation: [
-    { id: 'home', label: 'Home', href: '#home', code: '01' },
-    { id: 'about', label: 'About', href: '#about', code: '02' },
-    { id: 'youtube', label: 'YouTube', href: '#youtube', code: '03' },
-    { id: 'bots', label: 'Discord Bots', href: '#bots', code: '04' },
-    { id: 'communities', label: 'Communities', href: '#communities', code: '05' },
-    { id: 'contact', label: 'Contact', href: '#contact', code: '06' },
-    { id: 'credits', label: 'Credits', href: '#credits', code: '07' },
+    { id: 'home', label: 'Home', href: '#/', code: '01' },
+    { id: 'youtube', label: 'YouTube', href: '#/youtube', code: '02' },
+    { id: 'bots', label: 'Discord Bots', href: '#/bots', code: '03' },
+    { id: 'communities', label: 'Communities', href: '#/communities', code: '04' },
+    { id: 'game', label: 'Space Mine', href: '#/game', code: '05' },
+    { id: 'contact', label: 'Contact', href: '#/contact', code: '06' },
+    { id: 'credits', label: 'Credits', href: '#/credits', code: '07' },
   ] satisfies NavItem[],
 
   heroStatusPanel: [
@@ -694,10 +694,10 @@ export const SITE_CONFIG = {
         inviteUrl: 'https://discord.gg/48CMZz5SwD',
         buttonText: 'JOIN MY COMMUNITY',
         theme: {
-          primary: '#00F5FF',
-          secondary: '#397BFF',
-          glow: 'rgba(0, 245, 255, 0.35)',
-          badgeBg: 'rgba(0, 245, 255, 0.12)',
+          primary: '#FF2740',
+          secondary: '#FF3CAC',
+          glow: 'rgba(255, 39, 64, 0.38)',
+          badgeBg: 'rgba(255, 39, 64, 0.14)',
           emblemType: 'command-crest',
         },
       },

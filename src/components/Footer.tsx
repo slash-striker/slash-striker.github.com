@@ -7,7 +7,6 @@ export const Footer: React.FC = () => {
 
   const handleBackToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    window.history.replaceState(null, '', '#home');
   };
 
   const handleNavClick = (
@@ -16,16 +15,11 @@ export const Footer: React.FC = () => {
   ) => {
     if (href.startsWith('#')) {
       e.preventDefault();
-      const id = href.slice(1);
-      if (id === 'home') {
+      if (window.location.hash === href) {
         handleBackToTop();
         return;
       }
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.history.replaceState(null, '', href);
-      }
+      window.location.hash = href;
     }
   };
 
@@ -36,8 +30,8 @@ export const Footer: React.FC = () => {
           {/* Brand Column */}
           <div className="cyber-footer__brand">
             <a
-              href="#home"
-              onClick={(e) => handleNavClick(e, '#home')}
+              href="#/"
+              onClick={(e) => handleNavClick(e, '#/')}
               className="cyber-logo"
             >
               <span className="cyber-logo__emblem" aria-hidden="true">

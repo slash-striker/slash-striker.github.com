@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { SITE_CONFIG } from '../data/siteConfig';
-import { cyberAudio } from '../utils/soundEngine';
 
 interface NavbarProps {
   activeSection: string;
@@ -15,13 +14,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [localTime, setLocalTime] = useState<string>('');
   const [scrolled, setScrolled] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState<boolean>(() =>
-    cyberAudio.getEnabled()
-  );
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = document.documentElement.getAttribute('data-theme');
+    return saved === 'light' ? 'light' : 'dark';
+  });
 
-  useEffect(() => {
-    return cyberAudio.subscribe(setAudioEnabled);
-  }, []);
+  const handleToggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    try {
+      window.localStorage.setItem('ss-theme', next);
+    } catch {
+      // Storage can be unavailable — the theme still applies live.
+    }
+  };
 
   useEffect(() => {
     const updateClock = () => {
@@ -48,30 +55,18 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleToggleAudio = async () => {
-    await cyberAudio.toggle();
-  };
-
   const handleNavClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
     href: string
   ) => {
-    cyberAudio.playClickPulse();
-    if (href.startsWith('#')) {
-      e.preventDefault();
-      setMobileMenuOpen(false);
-      const id = href.slice(1);
-      if (id === 'home') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        window.history.replaceState(null, '', '#home');
-        return;
-      }
-      const target = document.getElementById(id);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.history.replaceState(null, '', href);
-      }
+    if (!href.startsWith('#')) return;
+    e.preventDefault();
+    setMobileMenuOpen(false);
+    if (window.location.hash === href) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+    window.location.hash = href;
   };
 
   return (
@@ -86,9 +81,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="container cyber-nav__inner">
         {/* Clickable Logo returning to homepage */}
         <a
-          href="#home"
-          onClick={(e) => handleNavClick(e, '#home')}
-          onMouseEnter={() => cyberAudio.playHoverBlip()}
+          href="#/"
+          onClick={(e) => handleNavClick(e, '#/')}
           className="cyber-logo"
           aria-label="SlashStr1ker — Return to Homepage"
         >
@@ -132,7 +126,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 key={item.id}
                 href={item.href}
                 onClick={(e) => handleNavClick(e, item.href)}
-                onMouseEnter={() => cyberAudio.playHoverBlip()}
                 className={`cyber-nav__link ${isActive ? 'is-active' : ''}`}
               >
                 <span className="cyber-nav__link-code">{item.code}</span>
@@ -142,38 +135,23 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right HUD Controls: Synth Audio Toggle, Clock & Mobile Hamburger */}
+        {/* Right HUD Controls: Theme Toggle, Clock & Mobile Hamburger */}
         <div className="cyber-nav__meta">
           <button
             type="button"
-            onClick={handleToggleAudio}
-            className={`cyber-audio-toggle ${audioEnabled ? 'is-active' : ''}`}
-            aria-pressed={audioEnabled}
+            onClick={handleToggleTheme}
+            className="cyber-theme-toggle"
             aria-label={
-              audioEnabled
-                ? 'Mute HUD audio and ambient space synth'
-                : 'Enable HUD audio and ambient space synth'
+              theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
             }
             title={
-              audioEnabled
-                ? 'HUD Audio & Space Synth: ON (Click to mute)'
-                : 'HUD Audio & Space Synth: MUTED (Click to enable)'
+              theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
             }
           >
-            {audioEnabled ? (
-              <Volume2 size={15} aria-hidden="true" />
+            {theme === 'dark' ? (
+              <Sun size={15} aria-hidden="true" />
             ) : (
-              <VolumeX size={15} aria-hidden="true" />
-            )}
-            <span className="cyber-audio-toggle__label">
-              {audioEnabled ? 'SYNTH: ON' : 'SYNTH: MUTED'}
-            </span>
-            {audioEnabled && (
-              <span className="cyber-audio-toggle__bars" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
+              <Moon size={15} aria-hidden="true" />
             )}
           </button>
 
@@ -190,10 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             className={`cyber-hamburger ${mobileMenuOpen ? 'is-open' : ''}`}
-            onClick={() => {
-              cyberAudio.playClickPulse();
-              setMobileMenuOpen((prev) => !prev);
-            }}
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-nav-drawer"
             aria-label={

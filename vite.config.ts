@@ -120,4 +120,11 @@ function youtubeLatestDevPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), youtubeLatestDevPlugin()],
+  build: {
+    // Support older mobile browsers (older iOS Safari / Android WebView):
+    // the default target assumes Safari 16+, which can leave old iPhones
+    // with a blank page because the bundle fails to parse.
+    target: 'es2018',
+    cssTarget: 'chrome61',
+  },
 });
