@@ -9,6 +9,7 @@ import { YouTubeSection } from './components/YouTubeSection';
 import { BotLabSection } from './components/BotLabSection';
 import { CommunitiesSection } from './components/CommunitiesSection';
 import { ContactSection } from './components/ContactSection';
+import { CreditsSection } from './components/CreditsSection';
 import { Footer } from './components/Footer';
 import { NotFoundView } from './components/NotFoundView';
 
@@ -115,6 +116,14 @@ export const App: React.FC = () => {
           </div>
 
           <ContactSection />
+
+          <div className="section-divider" aria-hidden="true">
+            <span className="section-divider__line" />
+            <span className="section-divider__tag">SYS.TRANSITION // 06-07</span>
+            <span className="section-divider__line" />
+          </div>
+
+          <CreditsSection />
         </main>
       )}
 

@@ -71,6 +71,17 @@ export interface CommunityCard {
   };
 }
 
+export interface CreditEntry {
+  id: string;
+  code: string;
+  name: string;
+  alias: string;
+  role: string;
+  description: string;
+  accent: 'cyan' | 'blue' | 'purple';
+  iconKey: 'github' | 'testing';
+}
+
 export interface YouTubeVideoItem {
   videoId: string;
   title: string;
@@ -110,6 +121,7 @@ export const SITE_CONFIG = {
     { id: 'bots', label: 'Discord Bots', href: '#bots', code: '04' },
     { id: 'communities', label: 'Communities', href: '#communities', code: '05' },
     { id: 'contact', label: 'Contact', href: '#contact', code: '06' },
+    { id: 'credits', label: 'Credits', href: '#credits', code: '07' },
   ] satisfies NavItem[],
 
   heroStatusPanel: [
@@ -739,6 +751,37 @@ export const SITE_CONFIG = {
     copySuccessText: 'USERNAME COPIED.',
     communityUrl: 'https://discord.gg/48CMZz5SwD',
     youtubeUrl: 'https://www.youtube.com/@SlashStr1ker?sub_confirmation=1',
+  },
+
+  credits: {
+    sectionTag: 'CREDIT ROLL // 07',
+    heading: 'SPECIAL THANKS',
+    subtitle:
+      'This universe was built with a lot of help. Permanent shout-out to these legends for the assist.',
+    entries: [
+      {
+        id: 'dragonfire',
+        code: 'CREDIT 01 // GITHUB OPS',
+        name: 'DragonFire',
+        alias: 'DragonFire332',
+        role: 'GITHUB REPOS & PAGES',
+        description:
+          'For helping me get to GitHub repos and GitHub Pages — getting this website built and launched online.',
+        accent: 'cyan',
+        iconKey: 'github',
+      },
+      {
+        id: 'relied',
+        code: 'CREDIT 02 // QA & FEEDBACK',
+        name: 'Relied',
+        alias: '',
+        role: 'WEBSITE TESTING & FEEDBACK',
+        description:
+          'For helping test this website and giving good inputs on what to change.',
+        accent: 'purple',
+        iconKey: 'testing',
+      },
+    ] satisfies CreditEntry[],
   },
 
   footer: {
