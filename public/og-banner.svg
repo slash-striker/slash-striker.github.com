@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#050610"/>
+      <stop offset="50%" stop-color="#0A1020"/>
+      <stop offset="100%" stop-color="#050610"/>
+    </linearGradient>
+    <radialGradient id="nebula1" cx="78%" cy="42%" r="42%">
+      <stop offset="0%" stop-color="#00F5FF" stop-opacity="0.32"/>
+      <stop offset="45%" stop-color="#397BFF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#050610" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula2" cx="25%" cy="30%" r="40%">
+      <stop offset="0%" stop-color="#A855F7" stop-opacity="0.26"/>
+      <stop offset="60%" stop-color="#FF3CAC" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#050610" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brand" x1="100" y1="240" x2="780" y2="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F5F7FF"/>
+      <stop offset="50%" stop-color="#00F5FF"/>
+      <stop offset="100%" stop-color="#397BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#nebula1)"/>
+  <rect width="1200" height="630" fill="url(#nebula2)"/>
+  <g stroke="#00F5FF" stroke-opacity="0.12" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="90" y1="0" x2="90" y2="630"/>
+    <line x1="1110" y1="0" x2="1110" y2="630"/>
+  </g>
+  <circle cx="930" cy="295" r="145" fill="#070E22" stroke="#00F5FF" stroke-width="3" stroke-opacity="0.65"/>
+  <ellipse cx="930" cy="295" rx="225" ry="62" transform="rotate(-18 930 295)" stroke="#397BFF" stroke-width="3" stroke-opacity="0.55" fill="none"/>
+  <ellipse cx="930" cy="295" rx="190" ry="44" transform="rotate(-18 930 295)" stroke="#FF3CAC" stroke-width="1.5" stroke-opacity="0.45" fill="none"/>
+  <text x="115" y="195" fill="#00F5FF" font-family="Orbitron, sans-serif" font-size="22" font-weight="700" letter-spacing="6">WELCOME TO THE DIGITAL FRONTIER</text>
+  <text x="115" y="305" fill="url(#brand)" font-family="Orbitron, sans-serif" font-size="84" font-weight="900" letter-spacing="4">SLASHSTR1KER</text>
+  <text x="115" y="370" fill="#F5F7FF" font-family="Inter, sans-serif" font-size="30" font-weight="600">Gaming Beyond Limits. Bots Beyond Imagination.</text>
+  <text x="115" y="430" fill="#9BA8C7" font-family="Inter, sans-serif" font-size="21">YouTube Creator • Discord Bot Lab • Netquel Universe Gateway</text>
+  <rect x="115" y="472" width="290" height="44" rx="8" fill="#00F5FF" fill-opacity="0.12" stroke="#00F5FF" stroke-opacity="0.6"/>
+  <text x="140" y="501" fill="#00F5FF" font-family="JetBrains Mono, monospace" font-size="16" letter-spacing="2">SLASH-STRIKER.NETLIFY.APP</text>
+</svg>
