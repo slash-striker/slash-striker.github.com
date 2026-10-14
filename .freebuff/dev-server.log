@@ -1,0 +1,7 @@
+
+  VITE v6.4.4  ready in 345 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+1:08:06 AM [vite] (client) page reload index.html
+1:08:06 AM [vite] (client) hmr update /src/App.tsx, /src/components/CommunitiesSection.tsx, /src/components/AboutSection.tsx, /src/components/HeroSection.tsx, /src/components/ContactSection.tsx, /src/components/Navbar.tsx, /src/components/YouTubeSection.tsx, /src/components/Footer.tsx, /src/components/BotLabSection.tsx, /src/components/NotFoundView.tsx
+1:08:29 AM [vite] (client) page reload public/404.html
