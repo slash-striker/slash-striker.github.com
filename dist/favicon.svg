@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#050610"/>
+      <stop offset="100%" stop-color="#0A1020"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00F5FF"/>
+      <stop offset="55%" stop-color="#397BFF"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+    <linearGradient id="slash" x1="30" y1="104" x2="98" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF3CAC"/>
+      <stop offset="50%" stop-color="#00F5FF"/>
+      <stop offset="100%" stop-color="#F5F7FF"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="url(#bg)" stroke="url(#neon)" stroke-width="4"/>
+  <polygon points="64,14 110,40 110,88 64,114 18,88 18,40" fill="none" stroke="#00F5FF" stroke-opacity="0.28" stroke-width="2"/>
+  <path d="M42 42H84L54 64H86L42 92" stroke="url(#neon)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M30 98L98 30" stroke="url(#slash)" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="98" cy="30" r="4" fill="#00F5FF"/>
+  <circle cx="30" cy="98" r="4" fill="#FF3CAC"/>
+</svg>
