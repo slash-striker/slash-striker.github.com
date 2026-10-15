@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CosmicBackground } from './components/CosmicBackground';
 import { CustomCursor } from './components/CustomCursor';
+import { FloatingShip } from './components/FloatingShip';
+import { BootLoader, RouteLoadingBar } from './components/LoadingBars';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { AboutSection } from './components/AboutSection';
@@ -152,12 +154,16 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-root">
+      <BootLoader />
+
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
       <CosmicBackground />
       <CustomCursor />
+      <FloatingShip />
+      <RouteLoadingBar key={route ?? 'none'} />
 
       <Navbar activeSection={navId} scrollProgress={scrollProgress} />
 

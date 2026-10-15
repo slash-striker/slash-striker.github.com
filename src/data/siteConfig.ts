@@ -193,8 +193,8 @@ export const SITE_CONFIG = {
     channelName: 'SlashStr1ker',
     channelHandle: '@SlashStr1ker',
     channelId: 'UCNkuaq6HNa8UW4usOvPZtvw',
-    heading: 'TRANSMISSION RECEIVED?',
-    subheading: 'Join the channel. Enter the universe.',
+    heading: 'LATEST FROM THE CHANNEL',
+    subheading: 'Subscribe for new videos, streams, and digital adventures.',
     description:
       'Gaming, digital adventures, and more. Subscribe to SlashStr1ker and join the journey as the universe continues to expand.',
     primaryButtonText: 'SUBSCRIBE TO SLASHSTR1KER',
@@ -681,7 +681,7 @@ export const SITE_CONFIG = {
   communities: {
     sectionTag: 'ALLIANCE DIRECTORY // 05',
     heading: 'FIND YOUR SQUAD',
-    subtitle: 'Three gateways. One digital frontier.',
+    subtitle: 'Three official communities. Find the one that fits you.',
     servers: [
       {
         id: 'slashstr1ker',
@@ -757,7 +757,7 @@ export const SITE_CONFIG = {
     sectionTag: 'CREDIT ROLL // 07',
     heading: 'SPECIAL THANKS',
     subtitle:
-      'This universe was built with a lot of help. Permanent shout-out to these legends for the assist.',
+      'Thank you to the people who helped build this site and community.',
     entries: [
       {
         id: 'dragonfire',

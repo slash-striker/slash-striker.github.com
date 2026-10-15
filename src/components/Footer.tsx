@@ -136,12 +136,13 @@ export const Footer: React.FC = () => {
             <button
               type="button"
               onClick={handleBackToTop}
-              className="back-to-top-orb"
-              aria-label="Back to top"
+              className="back-to-top"
             >
-              <span className="back-to-top-orb__ring" aria-hidden="true" />
-              <ArrowUp size={20} aria-hidden="true" />
-              <span className="back-to-top-orb__label">TOP</span>
+              <span className="back-to-top-orb" aria-hidden="true">
+                <span className="back-to-top-orb__ring" />
+                <ArrowUp size={20} />
+              </span>
+              <span className="back-to-top__caption">SCROLL TO TOP</span>
             </button>
           </div>
         </div>

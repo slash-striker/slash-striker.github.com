@@ -1,23 +1,41 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Gauge, Gem, Pause, Play, RotateCcw, Zap } from 'lucide-react';
+import {
+  Gauge,
+  Gem,
+  Pause,
+  Play,
+  Rocket,
+  RotateCcw,
+  Shield,
+  Zap,
+} from 'lucide-react';
 import { RevealOnScroll } from './RevealOnScroll';
 
 /*
- * SPACE MINE — a small arcade mining loop:
- * steer the rig, the laser auto-mines the lowest rock, ore drops, and ore
- * buys upgrades (laser / drill / engine). Progress persists in localStorage.
- * The canvas is intentionally always dark — it is space, after all.
+ * SPACE MINE — an arcade mining run:
+ *  - Steer the rig. The laser auto-mines the lowest rock, or tap a rock to
+ *    focus fire on it.
+ *  - Volatile rocks explode and chain into their neighbours. Rocks that ram
+ *    the rig or slip past it cost hull; when hull hits zero the rig is lost.
+ *  - Kill streaks build a combo multiplier (up to x5) that boosts ore.
+ *  - OVERDRIVE (E or the button) doubles fire rate and damage for a few
+ *    seconds, then recharges.
+ *  - Spend ore between runs. Hull plating raises max hull.
+ *  Progress persists in localStorage. The canvas stays dark — it's space.
  */
 
-type UpgradeKey = 'laser' | 'drill' | 'engine';
+type UpgradeKey = 'laser' | 'drill' | 'engine' | 'plating';
+type RockKind = 'common' | 'iron' | 'crystal' | 'volatile';
 
 interface Progress {
   ore: number;
   mined: number;
+  best: number;
   upgrades: Record<UpgradeKey, number>;
 }
 
 interface Rock {
+  id: number;
   x: number;
   y: number;
   vx: number;
@@ -28,7 +46,7 @@ interface Rock {
   ore: number;
   rot: number;
   spin: number;
-  kind: 'common' | 'iron' | 'crystal';
+  kind: RockKind;
   shape: number[];
 }
 
@@ -49,14 +67,71 @@ interface Beam {
   x2: number;
   y2: number;
   life: number;
+  wide: boolean;
+}
+
+interface Ring {
+  x: number;
+  y: number;
+  maxR: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
+interface Popup {
+  x: number;
+  y: number;
+  text: string;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
+interface Hud {
+  hull: number;
+  hullMax: number;
+  combo: number;
+  mult: number;
+  abilityLabel: string;
+  abilityPct: number;
+  abilityReady: boolean;
+}
+
+interface Point {
+  x: number;
+  y: number;
 }
 
 const STORAGE_KEY = 'ss-spacemine';
+const HULL_BASE = 100;
+const HULL_PER_PLATING = 25;
+const HULL_REGEN = 0.35; // hull per second while running
+const OVERDRIVE_DURATION = 4;
+const OVERDRIVE_COOLDOWN = 12;
+const COMBO_WINDOW = 3; // seconds without a kill before the streak breaks
+const COMBO_MAX_MULT = 5;
+const BLAST_RADIUS = 80;
+const BLAST_DAMAGE = 2;
+const RIG_OFFSET = 42; // distance from the canvas bottom to the rig centre
+const ESCAPE_DAMAGE: Record<RockKind, number> = {
+  common: 2,
+  iron: 4,
+  crystal: 2,
+  volatile: 10,
+};
+const RAM_DAMAGE: Record<RockKind, number> = {
+  common: 6,
+  iron: 10,
+  crystal: 6,
+  volatile: 15,
+};
 
-const INITIAL_PROGRESS: Progress = {
-  ore: 0,
-  mined: 0,
-  upgrades: { laser: 1, drill: 1, engine: 1 },
+const INITIAL_UPGRADES: Record<UpgradeKey, number> = {
+  laser: 1,
+  drill: 1,
+  engine: 1,
+  plating: 1,
 };
 
 const UPGRADE_DEFS: {
@@ -68,33 +143,45 @@ const UPGRADE_DEFS: {
   { key: 'laser', label: 'LASER ARRAY', desc: 'Beam damage + fire rate', base: 15 },
   { key: 'drill', label: 'DRILL HEAD', desc: 'Ore yield per rock', base: 20 },
   { key: 'engine', label: 'ION ENGINE', desc: 'Rig movement speed', base: 25 },
+  {
+    key: 'plating',
+    label: 'HULL PLATING',
+    desc: `+${HULL_PER_PLATING} max hull per level`,
+    base: 30,
+  },
 ];
 
 const upgradeCost = (base: number, level: number): number =>
   Math.floor(base * Math.pow(1.55, level - 1));
 
+const hullMaxFor = (p: Progress): number =>
+  HULL_BASE + (p.upgrades.plating - 1) * HULL_PER_PLATING;
+
+const comboMultiplier = (count: number): number =>
+  Math.min(COMBO_MAX_MULT, 1 + count * 0.05);
+
+const freshProgress = (): Progress => ({
+  ore: 0,
+  mined: 0,
+  best: 0,
+  upgrades: { ...INITIAL_UPGRADES },
+});
+
 const loadProgress = (): Progress => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...INITIAL_PROGRESS, upgrades: { ...INITIAL_PROGRESS.upgrades } };
+    if (!raw) return freshProgress();
     const parsed = JSON.parse(raw) as Partial<Progress>;
-    const upgrades = {
-      ...INITIAL_PROGRESS.upgrades,
-      ...(parsed.upgrades || {}),
-    };
+    const num = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : 0;
     return {
-      ore:
-        typeof parsed.ore === 'number' && Number.isFinite(parsed.ore)
-          ? Math.max(0, parsed.ore)
-          : 0,
-      mined:
-        typeof parsed.mined === 'number' && Number.isFinite(parsed.mined)
-          ? Math.max(0, parsed.mined)
-          : 0,
-      upgrades,
+      ore: num(parsed.ore),
+      mined: num(parsed.mined),
+      best: num(parsed.best),
+      upgrades: { ...INITIAL_UPGRADES, ...(parsed.upgrades || {}) },
     };
   } catch {
-    return { ...INITIAL_PROGRESS, upgrades: { ...INITIAL_PROGRESS.upgrades } };
+    return freshProgress();
   }
 };
 
@@ -107,39 +194,63 @@ const saveProgress = (progress: Progress): void => {
 };
 
 const KIND_STYLE: Record<
-  Rock['kind'],
+  RockKind,
   { fill: string; edge: string; glow: string | null }
 > = {
   common: { fill: '#5d6688', edge: '#8f9ac2', glow: null },
   iron: { fill: '#7a5a48', edge: '#c08a5e', glow: null },
   crystal: { fill: '#8a1f52', edge: '#ff3cac', glow: 'rgba(255, 60, 172, 0.65)' },
+  volatile: { fill: '#6b3a10', edge: '#ffb020', glow: 'rgba(255, 176, 32, 0.8)' },
+};
+
+let rockSeq = 0;
+
+const pickKind = (depth: number): RockKind => {
+  // Volatile rocks only appear once the run is a few layers deep.
+  const volatileChance = depth >= 3 ? Math.min(0.22, 0.07 + depth * 0.005) : 0;
+  const crystalChance = Math.min(0.2, 0.1 + depth * 0.002);
+  const ironChance = 0.25;
+  const roll = Math.random();
+  if (roll < volatileChance) return 'volatile';
+  if (roll < volatileChance + crystalChance) return 'crystal';
+  if (roll < volatileChance + crystalChance + ironChance) return 'iron';
+  return 'common';
 };
 
 const makeRock = (width: number, depth: number): Rock => {
-  const roll = Math.random();
-  const kind: Rock['kind'] =
-    roll < 0.1 ? 'crystal' : roll < 0.35 ? 'iron' : 'common';
+  const kind = pickKind(depth);
   const r =
     kind === 'iron'
       ? 20 + Math.random() * 8
       : kind === 'crystal'
         ? 10 + Math.random() * 6
-        : 12 + Math.random() * 7;
-  const hp =
-    (kind === 'iron' ? 5 : kind === 'crystal' ? 3 : 2) +
-    Math.floor(depth / (kind === 'iron' ? 7 : 10));
+        : kind === 'volatile'
+          ? 13 + Math.random() * 4
+          : 12 + Math.random() * 7;
+  const hpBase = kind === 'iron' ? 5 : kind === 'crystal' ? 3 : 2;
+  const hpDepthDivisor = kind === 'iron' ? 7 : kind === 'volatile' ? 12 : 10;
+  const hp = hpBase + Math.floor(depth / hpDepthDivisor);
+  const ore =
+    kind === 'crystal'
+      ? 9
+      : kind === 'iron'
+        ? 5
+        : kind === 'volatile'
+          ? 1
+          : 2 + (Math.random() < 0.4 ? 1 : 0);
   const shape = Array.from({ length: 9 }, () => 0.72 + Math.random() * 0.5);
   return {
+    id: ++rockSeq,
     x: r + Math.random() * Math.max(1, width - r * 2),
     y: -r - 10,
-    vx: (Math.random() - 0.5) * 36,
-    vy: Math.min(120, 26 + depth * 1.6 + Math.random() * 16),
+    vx: (Math.random() - 0.5) * (kind === 'crystal' ? 70 : 36),
+    vy:
+      Math.min(120, 26 + depth * 1.6 + Math.random() * 16) *
+      (kind === 'crystal' ? 1.25 : 1),
     r,
     hp,
     maxHp: hp,
-    ore:
-      (kind === 'crystal' ? 9 : kind === 'iron' ? 5 : 2) +
-      (Math.random() < 0.4 ? 1 : 0),
+    ore,
     rot: Math.random() * Math.PI * 2,
     spin: (Math.random() - 0.5) * 1.4,
     kind,
@@ -150,18 +261,31 @@ const makeRock = (width: number, depth: number): Rock => {
 export const SpaceMineGame: React.FC = () => {
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [running, setRunning] = useState(false);
+  const [wrecked, setWrecked] = useState(false);
   const [depth, setDepth] = useState(0);
+  const [hud, setHud] = useState<Hud>({
+    hull: HULL_BASE,
+    hullMax: HULL_BASE,
+    combo: 0,
+    mult: 1,
+    abilityLabel: 'READY',
+    abilityPct: 100,
+    abilityReady: true,
+  });
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const progressRef = useRef<Progress>(progress);
   const runningRef = useRef(false);
+  const wreckedRef = useRef(false);
   const startedRef = useRef(false);
 
   const rocksRef = useRef<Rock[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const beamsRef = useRef<Beam[]>([]);
+  const ringsRef = useRef<Ring[]>([]);
+  const popupsRef = useRef<Popup[]>([]);
   const starsRef = useRef<{ x: number; y: number; s: number; tw: number }[]>([]);
   const shipRef = useRef({ x: 0, targetX: 0 });
   const keysRef = useRef<Set<string>>(new Set());
@@ -171,6 +295,12 @@ export const SpaceMineGame: React.FC = () => {
   const depthRef = useRef(0);
   const depthTickRef = useRef(0);
   const saveTickRef = useRef(0);
+  const hudTickRef = useRef(0);
+  const hullRef = useRef(HULL_BASE);
+  const overdriveRef = useRef({ active: 0, cooldown: 0 });
+  const comboRef = useRef({ count: 0, timer: 0 });
+  const focusRef = useRef<number | null>(null);
+  const flashRef = useRef(0);
 
   const applyProgress = useCallback((next: Progress) => {
     progressRef.current = next;
@@ -185,6 +315,14 @@ export const SpaceMineGame: React.FC = () => {
     runningRef.current = value;
     setRunning(value);
     if (value) startedRef.current = true;
+  }, []);
+
+  const triggerOverdrive = useCallback(() => {
+    const od = overdriveRef.current;
+    if (!runningRef.current || od.cooldown > 0) return;
+    od.active = OVERDRIVE_DURATION;
+    od.cooldown = OVERDRIVE_COOLDOWN;
+    flashRef.current = Math.max(flashRef.current, 0.2);
   }, []);
 
   /* ------------------------------------------------------------------ */
@@ -216,7 +354,6 @@ export const SpaceMineGame: React.FC = () => {
         w - 24
       );
     }
-    // Regenerate starfield for the new canvas box.
     starsRef.current = Array.from({ length: 90 }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
@@ -268,7 +405,10 @@ export const SpaceMineGame: React.FC = () => {
       ctx.closePath();
       if (style.glow) {
         ctx.shadowColor = style.glow;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur =
+          rock.kind === 'volatile'
+            ? 10 + 8 * Math.abs(Math.sin(time / 200))
+            : 16;
       }
       ctx.fillStyle = style.fill;
       ctx.fill();
@@ -287,10 +427,30 @@ export const SpaceMineGame: React.FC = () => {
           const a = (c / cracks) * Math.PI * 2 + rock.rot;
           ctx.beginPath();
           ctx.moveTo(Math.cos(a) * rock.r * 0.2, Math.sin(a) * rock.r * 0.2);
-          ctx.lineTo(Math.cos(a + 0.4) * rock.r * 0.95, Math.sin(a + 0.4) * rock.r * 0.95);
+          ctx.lineTo(
+            Math.cos(a + 0.4) * rock.r * 0.95,
+            Math.sin(a + 0.4) * rock.r * 0.95
+          );
           ctx.stroke();
         }
       }
+      ctx.restore();
+    }
+
+    // Focus reticle on the rock being targeted by hand
+    const focusId = focusRef.current;
+    const focus =
+      focusId !== null ? rocksRef.current.find((r) => r.id === focusId) : undefined;
+    if (focus) {
+      ctx.save();
+      ctx.translate(focus.x, focus.y);
+      ctx.rotate(time / 900);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = '#00f5ff';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, focus.r + 9, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -298,7 +458,7 @@ export const SpaceMineGame: React.FC = () => {
     for (const beam of beamsRef.current) {
       const a = Math.max(0, beam.life / 0.14);
       ctx.strokeStyle = `rgba(255, 39, 64, ${a.toFixed(2)})`;
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = beam.wide ? 6 : 3.5;
       ctx.beginPath();
       ctx.moveTo(beam.x1, beam.y1);
       ctx.lineTo(beam.x2, beam.y2);
@@ -306,6 +466,18 @@ export const SpaceMineGame: React.FC = () => {
       ctx.strokeStyle = `rgba(255, 240, 240, ${(a * 0.9).toFixed(2)})`;
       ctx.lineWidth = 1.4;
       ctx.stroke();
+    }
+
+    // Blast shockwaves
+    for (const rg of ringsRef.current) {
+      const t = 1 - rg.life / rg.maxLife;
+      ctx.globalAlpha = Math.max(0, rg.life / rg.maxLife);
+      ctx.strokeStyle = rg.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(rg.x, rg.y, rg.maxR * t, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     // Particles
@@ -317,13 +489,31 @@ export const SpaceMineGame: React.FC = () => {
       ctx.globalAlpha = 1;
     }
 
+    // Floating ore popups
+    ctx.font = '700 13px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    for (const pp of popupsRef.current) {
+      ctx.globalAlpha = Math.max(0, pp.life / pp.maxLife);
+      ctx.fillStyle = pp.color;
+      ctx.fillText(pp.text, pp.x, pp.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+
     // Mining rig
     const ship = shipRef.current;
-    const shipY = h - 42;
+    const overdriveOn = overdriveRef.current.active > 0;
+    const shipY = h - RIG_OFFSET;
     const flicker = 6 + Math.sin(time / 60) * 3;
     ctx.save();
     ctx.translate(ship.x, shipY);
-    // Engine flame
+    if (overdriveOn) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 26 + Math.sin(time / 80) * 2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     const flame = ctx.createLinearGradient(0, 8, 0, 22 + flicker);
     flame.addColorStop(0, 'rgba(255, 60, 172, 0.9)');
     flame.addColorStop(1, 'rgba(0, 245, 255, 0)');
@@ -334,7 +524,6 @@ export const SpaceMineGame: React.FC = () => {
     ctx.lineTo(0, 20 + flicker);
     ctx.closePath();
     ctx.fill();
-    // Hull
     ctx.beginPath();
     ctx.moveTo(0, -18);
     ctx.lineTo(14, 12);
@@ -351,7 +540,6 @@ export const SpaceMineGame: React.FC = () => {
     ctx.shadowBlur = 12;
     ctx.stroke();
     ctx.shadowBlur = 0;
-    // Cockpit
     ctx.beginPath();
     ctx.arc(0, -5, 3.6, 0, Math.PI * 2);
     ctx.fillStyle = '#00f5ff';
@@ -360,27 +548,156 @@ export const SpaceMineGame: React.FC = () => {
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.restore();
+
+    // Hull hit flash
+    if (flashRef.current > 0) {
+      ctx.fillStyle = `rgba(255, 39, 64, ${(flashRef.current * 0.35).toFixed(3)})`;
+      ctx.fillRect(0, 0, w, h);
+    }
   }, []);
 
   /* ------------------------------------------------------------------ */
   /* Simulation + main loop                                             */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
+    hullRef.current = hullMaxFor(progressRef.current);
     resize();
     window.addEventListener('resize', resize);
 
     let raf = 0;
     let last = performance.now();
 
+    const pickTarget = (): Rock | null => {
+      const rocks = rocksRef.current;
+      if (focusRef.current !== null) {
+        const focused = rocks.find((r) => r.id === focusRef.current);
+        if (focused) return focused;
+        focusRef.current = null;
+      }
+      let target: Rock | null = null;
+      for (const rock of rocks) {
+        if (!target || rock.y > target.y) target = rock;
+      }
+      return target;
+    };
+
+    // Banks ore for a destroyed rock and advances the kill streak.
+    const award = (rock: Rock) => {
+      const combo = comboRef.current;
+      combo.count += 1;
+      combo.timer = COMBO_WINDOW;
+      const mult = comboMultiplier(combo.count);
+      const cur = progressRef.current;
+      const earned = Math.max(
+        1,
+        Math.floor(rock.ore * (1 + (cur.upgrades.drill - 1) * 0.5) * mult)
+      );
+      const next: Progress = {
+        ...cur,
+        ore: cur.ore + earned,
+        mined: cur.mined + 1,
+      };
+      applyProgress(next);
+      saveProgress(next);
+
+      const style = KIND_STYLE[rock.kind];
+      popupsRef.current.push({
+        x: rock.x,
+        y: rock.y,
+        text: `+${earned}`,
+        life: 0.9,
+        maxLife: 0.9,
+        color: style.edge,
+      });
+      const bits = rock.kind === 'crystal' || rock.kind === 'volatile' ? 18 : 12;
+      for (let i = 0; i < bits; i += 1) {
+        particlesRef.current.push({
+          x: rock.x,
+          y: rock.y,
+          vx: (Math.random() - 0.5) * 240,
+          vy: (Math.random() - 0.5) * 240,
+          life: 0.55 + Math.random() * 0.35,
+          maxLife: 0.9,
+          color: Math.random() < 0.5 ? style.edge : style.fill,
+          size: 2 + Math.random() * 3,
+        });
+      }
+    };
+
+    const buildHud = (): Hud => {
+      const od = overdriveRef.current;
+      const count = comboRef.current.count;
+      let abilityLabel: string;
+      let abilityPct: number;
+      let abilityReady = false;
+      if (od.active > 0) {
+        abilityLabel = `ACTIVE ${od.active.toFixed(1)}S`;
+        abilityPct = (od.active / OVERDRIVE_DURATION) * 100;
+      } else if (od.cooldown > 0) {
+        abilityLabel = `RECHARGE ${od.cooldown.toFixed(1)}S`;
+        abilityPct = (1 - od.cooldown / OVERDRIVE_COOLDOWN) * 100;
+      } else {
+        abilityLabel = 'READY';
+        abilityPct = 100;
+        abilityReady = true;
+      }
+      return {
+        hull: Math.max(0, hullRef.current),
+        hullMax: hullMaxFor(progressRef.current),
+        combo: count,
+        mult: comboMultiplier(count),
+        abilityLabel,
+        abilityPct,
+        abilityReady,
+      };
+    };
+
+    const wreck = () => {
+      hullRef.current = 0;
+      wreckedRef.current = true;
+      runningRef.current = false;
+      setRunning(false);
+      setWrecked(true);
+      const cur = progressRef.current;
+      const best = Math.max(cur.best, depthRef.current);
+      const next: Progress = { ...cur, best };
+      applyProgress(next);
+      saveProgress(next);
+    };
+
     const step = (time: number) => {
-      raf = requestAnimationFrame(step);
+      raf = window.requestAnimationFrame(step);
       const dt = Math.min(0.05, (time - last) / 1000);
       last = time;
       const { w, h } = sizeRef.current;
       const ship = shipRef.current;
+      const rigY = h - RIG_OFFSET;
+
+      // Cosmetics always advance so pauses look clean.
+      particlesRef.current = particlesRef.current
+        .map((pt) => ({
+          ...pt,
+          x: pt.x + pt.vx * dt,
+          y: pt.y + pt.vy * dt,
+          vy: pt.vy + 140 * dt,
+          life: pt.life - dt,
+        }))
+        .filter((pt) => pt.life > 0);
+      beamsRef.current = beamsRef.current
+        .map((bm) => ({ ...bm, life: bm.life - dt }))
+        .filter((bm) => bm.life > 0);
+      ringsRef.current = ringsRef.current
+        .map((rg) => ({ ...rg, life: rg.life - dt }))
+        .filter((rg) => rg.life > 0);
+      popupsRef.current = popupsRef.current
+        .map((pp) => ({ ...pp, y: pp.y - 28 * dt, life: pp.life - dt }))
+        .filter((pp) => pp.life > 0);
+      flashRef.current = Math.max(0, flashRef.current - dt * 2.5);
 
       if (runningRef.current) {
         const p = progressRef.current;
+        const od = overdriveRef.current;
+        const combo = comboRef.current;
 
         // Depth (difficulty) tick
         depthTickRef.current += dt;
@@ -388,13 +705,16 @@ export const SpaceMineGame: React.FC = () => {
           depthTickRef.current = 0;
           depthRef.current += 1;
           setDepth(depthRef.current);
+          if (depthRef.current > progressRef.current.best) {
+            applyProgress({ ...progressRef.current, best: depthRef.current });
+          }
         }
 
         // Periodic safety save
         saveTickRef.current += dt;
         if (saveTickRef.current >= 5) {
           saveTickRef.current = 0;
-          saveProgress(p);
+          saveProgress(progressRef.current);
         }
 
         // Ship control — keyboard
@@ -403,7 +723,7 @@ export const SpaceMineGame: React.FC = () => {
         if (keysRef.current.has('ArrowLeft') || keysRef.current.has('a')) kbDir -= 1;
         if (keysRef.current.has('ArrowRight') || keysRef.current.has('d')) kbDir += 1;
         if (kbDir !== 0) {
-          ship.targetX = ship.x;
+          shipRef.current.targetX = ship.x;
           ship.x += kbDir * kbSpeed * dt;
         } else {
           // Pointer / touch follow
@@ -412,36 +732,41 @@ export const SpaceMineGame: React.FC = () => {
         }
         ship.x = Math.min(Math.max(ship.x, 22), w - 22);
 
+        // Timers
+        od.active = Math.max(0, od.active - dt);
+        od.cooldown = Math.max(0, od.cooldown - dt);
+        combo.timer = Math.max(0, combo.timer - dt);
+        if (combo.timer === 0) combo.count = 0;
+        const overdriveOn = od.active > 0;
+        hullRef.current = Math.min(
+          hullMaxFor(p),
+          hullRef.current + HULL_REGEN * dt
+        );
+
         // Spawn rocks
         spawnRef.current -= dt;
         if (spawnRef.current <= 0) {
-          const interval = Math.max(
-            0.4,
-            1.5 - depthRef.current * 0.035
-          );
+          const interval = Math.max(0.4, 1.5 - depthRef.current * 0.035);
           spawnRef.current = interval * (0.7 + Math.random() * 0.6);
           rocksRef.current.push(makeRock(w, depthRef.current));
         }
 
-        // Auto-mining laser on the lowest rock
+        // Laser: focus target if one is set, otherwise the lowest rock
         fireRef.current -= dt;
         if (fireRef.current <= 0) {
-          let target: Rock | null = null;
-          for (const rock of rocksRef.current) {
-            if (!target || rock.y > target.y) target = rock;
-          }
+          const target = pickTarget();
           if (target) {
-            fireRef.current = Math.max(0.16, 0.42 - (p.upgrades.laser - 1) * 0.03);
-            const noseX = ship.x;
-            const noseY = h - 42 - 18;
+            const base = Math.max(0.16, 0.42 - (p.upgrades.laser - 1) * 0.03);
+            fireRef.current = base / (overdriveOn ? 2.2 : 1);
             beamsRef.current.push({
-              x1: noseX,
-              y1: noseY,
+              x1: ship.x,
+              y1: rigY - 18,
               x2: target.x,
               y2: target.y,
               life: 0.14,
+              wide: overdriveOn,
             });
-            target.hp -= 1 + p.upgrades.laser;
+            target.hp -= (1 + p.upgrades.laser) * (overdriveOn ? 2 : 1);
             for (let i = 0; i < 3; i += 1) {
               particlesRef.current.push({
                 x: target.x + (Math.random() - 0.5) * target.r,
@@ -459,8 +784,10 @@ export const SpaceMineGame: React.FC = () => {
           }
         }
 
-        // Rock movement + break/escape handling
-        const survivors: Rock[] = [];
+        // Movement, rig collisions, escapes
+        const blasts: Point[] = [];
+        const queue: Rock[] = []; // laser kills, awarded below
+        let pool: Rock[] = [];
         for (const rock of rocksRef.current) {
           rock.x += rock.vx * dt;
           rock.y += rock.vy * dt;
@@ -472,65 +799,101 @@ export const SpaceMineGame: React.FC = () => {
             rock.x = w - rock.r;
             rock.vx = -Math.abs(rock.vx);
           }
-          if (rock.hp <= 0) {
-            const earned = Math.max(
-              1,
-              Math.floor(rock.ore * (1 + (p.upgrades.drill - 1) * 0.5))
-            );
-            const next: Progress = {
-              ore: progressRef.current.ore + earned,
-              mined: progressRef.current.mined + 1,
-              upgrades: progressRef.current.upgrades,
-            };
-            applyProgress(next);
-            saveProgress(next);
-            const style = KIND_STYLE[rock.kind];
-            const bits = rock.kind === 'crystal' ? 18 : 12;
-            for (let i = 0; i < bits; i += 1) {
+
+          // Ram: the rock hits the rig
+          if (
+            rock.y + rock.r >= rigY - 8 &&
+            rock.y < rigY + 20 &&
+            Math.abs(rock.x - ship.x) < rock.r + 14
+          ) {
+            hullRef.current -= RAM_DAMAGE[rock.kind];
+            combo.count = 0;
+            flashRef.current = 0.35;
+            for (let i = 0; i < 10; i += 1) {
               particlesRef.current.push({
                 x: rock.x,
-                y: rock.y,
-                vx: (Math.random() - 0.5) * 240,
-                vy: (Math.random() - 0.5) * 240,
-                life: 0.55 + Math.random() * 0.35,
-                maxLife: 0.9,
-                color: Math.random() < 0.5 ? style.edge : style.fill,
-                size: 2 + Math.random() * 3,
+                y: rigY,
+                vx: (Math.random() - 0.5) * 200,
+                vy: -Math.random() * 180,
+                life: 0.5,
+                maxLife: 0.5,
+                color: '#ff2740',
+                size: 2.5,
               });
             }
-          } else if (rock.y < h + rock.r + 30) {
-            survivors.push(rock);
+            if (rock.kind === 'volatile') blasts.push({ x: rock.x, y: rock.y });
+            continue;
+          }
+
+          // Escape: the rock got past the rig
+          if (rock.y - rock.r > h + 10) {
+            hullRef.current -= ESCAPE_DAMAGE[rock.kind];
+            combo.count = 0;
+            flashRef.current = Math.max(flashRef.current, 0.15);
+            continue;
+          }
+
+          if (rock.hp <= 0) {
+            queue.push(rock);
+          } else {
+            pool.push(rock);
           }
         }
-        rocksRef.current = survivors;
 
-        // Particles / beams bookkeeping
-        particlesRef.current = particlesRef.current
-          .map((pt) => ({
-            ...pt,
-            x: pt.x + pt.vx * dt,
-            y: pt.y + pt.vy * dt,
-            vy: pt.vy + 140 * dt,
-            life: pt.life - dt,
-          }))
-          .filter((pt) => pt.life > 0);
-        beamsRef.current = beamsRef.current
-          .map((bm) => ({ ...bm, life: bm.life - dt }))
-          .filter((bm) => bm.life > 0);
+        // Resolve kills and chain explosions until nothing else is pending
+        let cursor = 0;
+        let blastCursor = 0;
+        while (cursor < queue.length || blastCursor < blasts.length) {
+          while (cursor < queue.length) {
+            const rock = queue[cursor];
+            cursor += 1;
+            award(rock);
+            if (rock.kind === 'volatile') blasts.push({ x: rock.x, y: rock.y });
+          }
+          while (blastCursor < blasts.length) {
+            const blast = blasts[blastCursor];
+            blastCursor += 1;
+            ringsRef.current.push({
+              x: blast.x,
+              y: blast.y,
+              maxR: BLAST_RADIUS,
+              life: 0.45,
+              maxLife: 0.45,
+              color: '#ffb020',
+            });
+            pool = pool.filter((other) => {
+              if (Math.hypot(other.x - blast.x, other.y - blast.y) >= BLAST_RADIUS) {
+                return true;
+              }
+              other.hp -= BLAST_DAMAGE;
+              if (other.hp <= 0) {
+                queue.push(other);
+                return false;
+              }
+              return true;
+            });
+          }
+        }
+        rocksRef.current = pool;
+
+        if (hullRef.current <= 0) wreck();
       } else {
-        // Idle: keep particles/beams settled so resume looks clean
-        particlesRef.current = particlesRef.current
-          .map((pt) => ({ ...pt, life: pt.life - dt }))
-          .filter((pt) => pt.life > 0);
         beamsRef.current = [];
+      }
+
+      // HUD refreshes at 10 Hz to keep React renders light
+      hudTickRef.current += dt;
+      if (hudTickRef.current >= 0.1) {
+        hudTickRef.current = 0;
+        setHud(buildHud());
       }
 
       draw(time);
     };
 
-    raf = requestAnimationFrame(step);
+    raf = window.requestAnimationFrame(step);
     return () => {
-      cancelAnimationFrame(raf);
+      window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
       saveProgress(progressRef.current);
     };
@@ -552,6 +915,7 @@ export const SpaceMineGame: React.FC = () => {
           e.preventDefault();
         }
       }
+      if (e.key.toLowerCase() === 'e' && !e.repeat) triggerOverdrive();
       keysRef.current.add(e.key);
       if (e.key === ' ' && !startedRef.current) setRunningBoth(true);
     };
@@ -573,7 +937,7 @@ export const SpaceMineGame: React.FC = () => {
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [setRunningBoth]);
+  }, [setRunningBoth, triggerOverdrive]);
 
   const pointerToTarget = useCallback((clientX: number) => {
     const canvas = canvasRef.current;
@@ -585,9 +949,27 @@ export const SpaceMineGame: React.FC = () => {
   }, []);
 
   const handleStagePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      // Tapping a rock focuses fire on it; tapping empty space clears focus.
+      const rect = canvas.getBoundingClientRect();
+      const { w, h } = sizeRef.current;
+      const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * w;
+      const py = ((e.clientY - rect.top) / Math.max(1, rect.height)) * h;
+      let hit: Rock | null = null;
+      let bestDist = Infinity;
+      for (const rock of rocksRef.current) {
+        const d = Math.hypot(rock.x - px, rock.y - py);
+        if (d < rock.r + 12 && d < bestDist) {
+          hit = rock;
+          bestDist = d;
+        }
+      }
+      focusRef.current = hit ? hit.id : null;
+    }
     pointerToTarget(e.clientX);
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    if (!runningRef.current) setRunningBoth(true);
+    if (!runningRef.current && !wreckedRef.current) setRunningBoth(true);
   };
 
   const handleStagePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -602,7 +984,10 @@ export const SpaceMineGame: React.FC = () => {
   /* ------------------------------------------------------------------ */
   /* Actions                                                            */
   /* ------------------------------------------------------------------ */
-  const handleStartPause = () => setRunningBoth(!runningRef.current);
+  const handleStartPause = () => {
+    if (wreckedRef.current) return;
+    setRunningBoth(!runningRef.current);
+  };
 
   const handleBuy = (key: UpgradeKey) => {
     const current = progressRef.current;
@@ -618,25 +1003,49 @@ export const SpaceMineGame: React.FC = () => {
     };
     applyProgress(next);
     saveProgress(next);
+    if (key === 'plating') {
+      // New plating also patches the hull immediately.
+      hullRef.current = Math.min(
+        hullMaxFor(next),
+        hullRef.current + HULL_PER_PLATING
+      );
+    }
   };
 
-  const handleReset = () => {
-    if (!window.confirm('Wipe your mining progress and start over?')) return;
-    const next: Progress = {
-      ore: 0,
-      mined: 0,
-      upgrades: { laser: 1, drill: 1, engine: 1 },
-    };
-    applyProgress(next);
-    saveProgress(next);
+  // Clears the field and starts a fresh rig. Ore and upgrades are kept.
+  const resetRun = () => {
+    wreckedRef.current = false;
+    hullRef.current = hullMaxFor(progressRef.current);
     rocksRef.current = [];
     particlesRef.current = [];
     beamsRef.current = [];
+    ringsRef.current = [];
+    popupsRef.current = [];
+    overdriveRef.current = { active: 0, cooldown: 0 };
+    comboRef.current = { count: 0, timer: 0 };
+    focusRef.current = null;
     depthRef.current = 0;
     depthTickRef.current = 0;
     setDepth(0);
+    setWrecked(false);
+  };
+
+  const handleRebuild = () => {
+    resetRun();
+    setRunningBoth(true);
+  };
+
+  const handleReset = () => {
+    if (!window.confirm('Wipe all mining progress, including your best depth?')) return;
+    const next = freshProgress();
+    applyProgress(next);
+    saveProgress(next);
+    resetRun();
+    startedRef.current = false;
     setRunningBoth(false);
   };
+
+  const hullPct = Math.max(0, Math.min(100, (hud.hull / hud.hullMax) * 100));
 
   return (
     <section id="game" className="section-shell space-mine-section">
@@ -651,7 +1060,7 @@ export const SpaceMineGame: React.FC = () => {
               SPACE MINE
             </h2>
             <p className="section-subtitle">
-              Grind rocks. Upgrade the rig. Dig deeper into the dark.
+              Grind rocks. Chain explosions. Upgrade the rig. Dig deeper into the dark.
             </p>
           </div>
         </RevealOnScroll>
@@ -661,18 +1070,53 @@ export const SpaceMineGame: React.FC = () => {
             <span className="hud-corner-tl" aria-hidden="true" />
             <span className="hud-corner-br" aria-hidden="true" />
 
-            <div className="smine-hud__stats">
-              <div className="smine-stat">
-                <span className="smine-stat__label">ORE</span>
-                <span className="smine-stat__value">{progress.ore}</span>
+            <div className="smine-hud__main">
+              <div className="smine-hud__stats">
+                <div className="smine-stat">
+                  <span className="smine-stat__label">ORE</span>
+                  <span className="smine-stat__value">{progress.ore}</span>
+                </div>
+                <div className="smine-stat">
+                  <span className="smine-stat__label">ROCKS MINED</span>
+                  <span className="smine-stat__value">{progress.mined}</span>
+                </div>
+                <div className="smine-stat">
+                  <span className="smine-stat__label">DEPTH</span>
+                  <span className="smine-stat__value">{depth}</span>
+                </div>
+                <div className="smine-stat">
+                  <span className="smine-stat__label">BEST DEPTH</span>
+                  <span className="smine-stat__value">{progress.best}</span>
+                </div>
+                <div className="smine-stat">
+                  <span className="smine-stat__label">COMBO</span>
+                  <span className="smine-stat__value">x{hud.mult.toFixed(1)}</span>
+                </div>
               </div>
-              <div className="smine-stat">
-                <span className="smine-stat__label">ROCKS MINED</span>
-                <span className="smine-stat__value">{progress.mined}</span>
-              </div>
-              <div className="smine-stat">
-                <span className="smine-stat__label">DEPTH</span>
-                <span className="smine-stat__value">{depth}</span>
+
+              <div className="smine-hud__meters">
+                <div className="smine-meter">
+                  <span className="smine-meter__label">
+                    HULL {Math.ceil(hud.hull)} / {hud.hullMax}
+                  </span>
+                  <div className="smine-meter__track">
+                    <div
+                      className={`smine-meter__fill ${hullPct < 35 ? 'is-critical' : ''}`}
+                      style={{ width: `${hullPct.toFixed(1)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="smine-meter">
+                  <span className="smine-meter__label">
+                    OVERDRIVE // {hud.abilityLabel}
+                  </span>
+                  <div className="smine-meter__track">
+                    <div
+                      className={`smine-meter__fill is-ability ${hud.abilityReady ? 'is-ready' : ''}`}
+                      style={{ width: `${hud.abilityPct.toFixed(1)}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -681,6 +1125,7 @@ export const SpaceMineGame: React.FC = () => {
                 type="button"
                 className="cyber-btn cyber-btn--ghost smine-control-btn"
                 onClick={handleStartPause}
+                disabled={wrecked}
               >
                 {running ? (
                   <>
@@ -693,6 +1138,15 @@ export const SpaceMineGame: React.FC = () => {
                     <span>{startedRef.current ? 'RESUME' : 'START'}</span>
                   </>
                 )}
+              </button>
+              <button
+                type="button"
+                className={`cyber-btn cyber-btn--ghost smine-control-btn ${hud.abilityReady ? 'is-ready' : ''}`}
+                onClick={triggerOverdrive}
+                disabled={!running || !hud.abilityReady}
+              >
+                <Rocket size={15} aria-hidden="true" />
+                <span>OVERDRIVE [E]</span>
               </button>
               <button
                 type="button"
@@ -711,7 +1165,7 @@ export const SpaceMineGame: React.FC = () => {
             <canvas
               ref={canvasRef}
               className="smine-canvas"
-              aria-label="Space mining game area — steer with arrow keys or touch"
+              aria-label="Space mining game area — steer with arrow keys or drag, tap a rock to focus fire, press E for overdrive"
               onPointerDown={handleStagePointerDown}
               onPointerMove={handleStagePointerMove}
               onTouchMove={handleStageTouchMove}
@@ -719,19 +1173,39 @@ export const SpaceMineGame: React.FC = () => {
             {!running && (
               <div className="smine-overlay">
                 <span className="smine-overlay__badge">
-                  {startedRef.current ? 'RIG PAUSED' : 'RIG OFFLINE'}
+                  {wrecked
+                    ? 'RIG DESTROYED'
+                    : startedRef.current
+                      ? 'RIG PAUSED'
+                      : 'RIG OFFLINE'}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleStartPause}
-                  className="cyber-btn cyber-btn--primary"
-                >
-                  <Play size={17} aria-hidden="true" />
-                  <span>{startedRef.current ? 'RESUME MINING' : 'START MINING'}</span>
-                </button>
+                {wrecked ? (
+                  <>
+                    <span className="smine-overlay__summary">
+                      Run ended at depth {depth}. Your ore is banked.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRebuild}
+                      className="cyber-btn cyber-btn--primary"
+                    >
+                      <RotateCcw size={17} aria-hidden="true" />
+                      <span>REBUILD RIG</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartPause}
+                    className="cyber-btn cyber-btn--primary"
+                  >
+                    <Play size={17} aria-hidden="true" />
+                    <span>{startedRef.current ? 'RESUME MINING' : 'START MINING'}</span>
+                  </button>
+                )}
                 <span className="smine-overlay__hint">
-                  ARROW KEYS / A-D TO STEER — TOUCH &amp; DRAG ON MOBILE — THE
-                  LASER AUTO-MINES THE LOWEST ROCK
+                  ARROWS / A-D STEER — DRAG ON MOBILE — TAP A ROCK TO FOCUS FIRE —
+                  E FOR OVERDRIVE — VOLATILE ROCKS CHAIN-EXPLODE
                 </span>
               </div>
             )}
@@ -753,7 +1227,13 @@ export const SpaceMineGame: React.FC = () => {
                 const cost = upgradeCost(def.base, level);
                 const affordable = progress.ore >= cost;
                 const Icon =
-                  def.key === 'laser' ? Zap : def.key === 'drill' ? Gem : Gauge;
+                  def.key === 'laser'
+                    ? Zap
+                    : def.key === 'drill'
+                      ? Gem
+                      : def.key === 'engine'
+                        ? Gauge
+                        : Shield;
                 return (
                   <button
                     key={def.key}
